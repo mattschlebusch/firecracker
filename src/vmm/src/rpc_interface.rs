@@ -5,6 +5,8 @@ use std::fmt::{Display, Formatter};
 use std::result;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use guest_config::cpu::cpu_config::CustomCpuConfigurationApiRequest;
+use guest_config::{deserialize_configuration_request, GuestConfigurationError};
 use logger::*;
 use mmds::data_store::{self, Mmds};
 use seccompiler::BpfThreadMap;
@@ -93,6 +95,8 @@ pub enum VmmAction {
     Pause,
     /// Repopulate the MMDS contents.
     PutMMDS(Value),
+    /// Configure the guest vCPU features.
+    PutCpuConfiguration(CustomCpuConfigurationApiRequest),
     /// Resume the guest, by resuming the microVM VCPUs.
     Resume,
     /// Set the balloon device or update the one that already exists using the
@@ -134,6 +138,8 @@ pub enum VmmActionError {
     BootSource(BootSourceConfigError),
     /// The action `CreateSnapshot` failed.
     CreateSnapshot(CreateSnapshotError),
+    /// The action `ConfigureCpu` failed.
+    ConfigureCpu(GuestConfigurationError),
     /// One of the actions `InsertBlockDevice` or `UpdateBlockDevicePath`
     /// failed because of bad user input.
     DriveConfig(DriveError),
@@ -180,6 +186,7 @@ impl Display for VmmActionError {
             match self {
                 BalloonConfig(err) => err.to_string(),
                 BootSource(err) => err.to_string(),
+                ConfigureCpu(err) => err.to_string(),
                 CreateSnapshot(err) => err.to_string(),
                 DriveConfig(err) => err.to_string(),
                 InternalVmm(err) => format!("Internal Vmm error: {}", err),
@@ -427,6 +434,7 @@ impl<'a> PrebootApiController<'a> {
                 .load_snapshot(&config)
                 .map_err(VmmActionError::LoadSnapshot),
             PatchMMDS(value) => self.patch_mmds(value),
+            PutCpuConfiguration(cpu_config) => self.put_cpu_configuration(cpu_config),
             PutMMDS(value) => self.put_mmds(value),
             SetBalloonDevice(config) => self.set_balloon_device(config),
             SetVsockDevice(config) => self.set_vsock_device(config),
@@ -502,6 +510,21 @@ impl<'a> PrebootApiController<'a> {
             .update_vm_config(&cfg)
             .map(|()| VmmData::Empty)
             .map_err(VmmActionError::MachineConfig)
+    }
+
+    fn put_cpu_configuration(
+        &mut self,
+        cpu_config_request: CustomCpuConfigurationApiRequest,
+    ) -> ActionResult {
+        // TODO check file extensions in API request before compiling. If already binary, do nothing.
+        // Convert the API request into a a deserialized/binary format
+        let cpu_config = deserialize_configuration_request(&cpu_config_request)
+            .map_err(|err| VmmActionError::ConfigureCpu(err))?;
+
+        self.vm_resources
+            .configure_cpu(cpu_config)
+            .map(|()| VmmData::Empty)
+            .map_err(VmmActionError::ConfigureCpu)
     }
 
     fn set_vsock_device(&mut self, cfg: VsockDeviceConfig) -> ActionResult {
@@ -666,6 +689,7 @@ impl RuntimeApiController {
             | InsertBlockDevice(_)
             | InsertNetworkDevice(_)
             | LoadSnapshot(_)
+            | PutCpuConfiguration(_)
             | SetBalloonDevice(_)
             | SetVsockDevice(_)
             | SetMmdsConfiguration(_)
@@ -815,17 +839,21 @@ impl RuntimeApiController {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::PathBuf;
 
     use devices::virtio::balloon::{BalloonConfig, Error as BalloonError};
     use devices::virtio::VsockError;
+    use guest_config::cpu::cpu_config::{CpuConfigurationAttribute, CustomCpuConfiguration};
     use mmds::data_store::MmdsVersion;
     use seccompiler::BpfThreadMap;
+    use tempfile::Builder;
 
     use super::*;
     use crate::vmm_config::balloon::BalloonBuilder;
     use crate::vmm_config::drive::{CacheType, FileEngineType};
     use crate::vmm_config::logger::LoggerLevel;
+    use crate::vmm_config::machine_config::CpuFeaturesTemplate;
     use crate::vmm_config::snapshot::{MemBackendConfig, MemBackendType};
     use crate::vmm_config::vsock::VsockBuilder;
     use crate::HTTP_MAX_PAYLOAD_SIZE;
@@ -908,7 +936,7 @@ mod tests {
             self.vm_config.vcpu_count = machine_config.vcpu_count.unwrap();
             self.vm_config.mem_size_mib = machine_config.mem_size_mib.unwrap();
             self.vm_config.smt = machine_config.smt.unwrap();
-            self.vm_config.cpu_template = machine_config.cpu_template.unwrap();
+            self.vm_config.cpu_template = machine_config.cpu_template.as_ref().unwrap().clone();
             self.vm_config.track_dirty_pages = machine_config.track_dirty_pages.unwrap();
 
             Ok(())
@@ -994,6 +1022,17 @@ mod tests {
         pub fn locked_mmds_or_default(&mut self) -> MutexGuard<'_, Mmds> {
             let mmds = self.mmds_or_default();
             mmds.lock().expect("Poisoned lock")
+        }
+
+        pub fn configure_cpu(
+            &mut self,
+            cpu_config: CustomCpuConfiguration,
+        ) -> Result<(), GuestConfigurationError> {
+            // Update the CPU configuration on the VM
+            self.vm_config.cpu_template =
+                crate::vmm_config::machine_config::CpuFeaturesTemplate::CUSTOM(cpu_config);
+
+            Ok(())
         }
     }
 
@@ -1252,6 +1291,50 @@ mod tests {
         let expected_cfg = BalloonDeviceConfig::default();
         check_preboot_request(req, |result, _| {
             assert_eq!(result, Ok(VmmData::BalloonConfig(expected_cfg)))
+        });
+    }
+
+    #[test]
+    fn test_preboot_put_cpu_config() {
+        // Write test cpuid snapshot
+        let cpuid_tempfile = Builder::new()
+            .prefix("cpuid-test")
+            .suffix(".bin")
+            .tempfile()
+            .expect("Failed to create temporary file for testing CPUID");
+        let cpuid_file_path =
+            fs::canonicalize(cpuid_tempfile.path()).expect("Retrieving tempfile path required.");
+        let path_str = cpuid_file_path
+            .to_str()
+            .expect("Error retrieving file path.");
+        let config_request = CustomCpuConfigurationApiRequest {
+            base_arch_features_template_path: String::from(path_str),
+            cpu_feature_overrides: vec![
+                CpuConfigurationAttribute {
+                    name: String::from("ssbd"),
+                    is_enabled: false,
+                },
+                CpuConfigurationAttribute {
+                    name: String::from("ibrs"),
+                    is_enabled: true,
+                },
+            ],
+        };
+
+        let write_snapshot_result = guest_config::snapshot_local_cpu_features(path_str);
+        assert!(write_snapshot_result.is_ok());
+        let cpuid_config = write_snapshot_result.unwrap();
+        let config = CustomCpuConfiguration {
+            base_arch_features_configuration: cpuid_config,
+            cpu_feature_overrides: config_request.cpu_feature_overrides.clone(),
+        };
+        let req = VmmAction::PutCpuConfiguration(config_request);
+        check_preboot_request(req, |result, vm_res| {
+            assert_eq!(result, Ok(VmmData::Empty));
+            assert_eq!(
+                vm_res.vm_config.cpu_template,
+                CpuFeaturesTemplate::CUSTOM(config)
+            );
         });
     }
 
