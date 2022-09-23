@@ -282,6 +282,7 @@ name = "cpuid"
 version = "0.1.0"
 dependencies = [
  "arch",
+ "arch_gen",
  "bincode",
  "bit-fields",
  "construct",
