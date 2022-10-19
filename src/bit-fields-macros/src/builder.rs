@@ -618,7 +618,7 @@ impl BitFieldBuilder {
             /// <table>
             #struct_doc_table_layout
             /// </table>
-            #[derive(Debug,Clone,Copy,PartialEq,Eq)]
+            #[derive(Debug,Clone,Copy,PartialEq,Eq, construct::Inline)]
             #[repr(C)]
             pub struct #struct_name(pub #struct_data_type);
             #serde

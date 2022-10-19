@@ -1,0 +1,22 @@
+[package]
+name = "cpuid-templates"
+version = "0.1.0"
+edition = "2018"
+license = "Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static =  "1.4.0"
+cpuid = { path="../cpuid" }
+bit-fields = { path = "../bit-fields" }
+
+[dev-dependencies]
+serde_json = "1.0.85"
+
+[build-dependencies]
+cpuid = { path="../cpuid" }
+construct = { path="../construct" }
+serde_json = "1.0.85"
+quote = "1.0.21"
+proc-macro2 = "1.0.46"

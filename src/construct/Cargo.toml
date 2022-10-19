@@ -1,0 +1,12 @@
+[package]
+name = "construct"
+version = "0.1.0"
+edition = "2018"
+license = "Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+proc-macro2 = "1.0.46"
+quote = "1.0.21"
+construct-macros = { path = "../construct-macros" }
