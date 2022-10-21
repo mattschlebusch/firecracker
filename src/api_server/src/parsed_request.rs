@@ -11,6 +11,7 @@ use super::VmmData;
 use crate::request::actions::parse_put_actions;
 use crate::request::balloon::{parse_get_balloon, parse_patch_balloon, parse_put_balloon};
 use crate::request::boot_source::parse_put_boot_source;
+use crate::request::cpu_configuration::parse_put_cpu_config;
 use crate::request::drive::{parse_patch_drive, parse_put_drive};
 use crate::request::instance_info::parse_get_instance_info;
 use crate::request::logger::parse_put_logger;
@@ -104,6 +105,7 @@ impl ParsedRequest {
             (Method::Put, "actions", Some(body)) => parse_put_actions(body),
             (Method::Put, "balloon", Some(body)) => parse_put_balloon(body),
             (Method::Put, "boot-source", Some(body)) => parse_put_boot_source(body),
+            (Method::Put, "cpu-config", Some(body)) => parse_put_cpu_config(body),
             (Method::Put, "drives", Some(body)) => parse_put_drive(body, path_tokens.get(1)),
             (Method::Put, "logger", Some(body)) => parse_put_logger(body),
             (Method::Put, "machine-config", Some(body)) => parse_put_machine_config(body),
@@ -324,8 +326,10 @@ pub(crate) fn checked_id(id: &str) -> Result<&str, Error> {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::fs;
     use std::io::{Cursor, Write};
     use std::os::unix::net::UnixStream;
+    use std::path::Path;
     use std::str::FromStr;
 
     use micro_http::HttpConnection;
@@ -961,6 +965,34 @@ pub(crate) mod tests {
             "{ \"vcpu_count\": 1, \"mem_size_mib\": 1, \"smt\": false, \"cpu_template\": \"C3\" }";
         sender
             .write_all(http_request("PATCH", "/machine-config", Some(body)).as_bytes())
+            .unwrap();
+        assert!(connection.try_read().is_ok());
+        let req = connection.pop_parsed_request().unwrap();
+        #[cfg(target_arch = "x86_64")]
+        assert!(ParsedRequest::try_from_request(&req).is_ok());
+        #[cfg(target_arch = "aarch64")]
+        assert!(ParsedRequest::try_from_request(&req).is_err());
+    }
+
+    const TEST_CPU_TEMPLATE_JSON_FILE_PATH: &str =
+        "../../resources/guest_configs/cpu/x86_64_user_config_template_example.json";
+    #[test]
+    fn test_try_from_put_cpu_config() {
+        let user_cpu_template_read_result =
+            fs::read_to_string(Path::new(TEST_CPU_TEMPLATE_JSON_FILE_PATH));
+        assert!(user_cpu_template_read_result.is_ok());
+        let config_request_result =
+            guest_config::deserialize_cpu_config(user_cpu_template_read_result.unwrap().as_str());
+        assert!(config_request_result.is_ok());
+        let config_request = config_request_result.unwrap();
+        let (mut sender, receiver) = UnixStream::pair().unwrap();
+        let mut connection = HttpConnection::new(receiver);
+
+        let config_request_json_result = serde_json::to_string(&config_request);
+        assert!(config_request_json_result.is_ok());
+        let config_request_json = config_request_json_result.unwrap();
+        sender
+            .write_all(http_request("PUT", "/cpu-config", Some(&config_request_json)).as_bytes())
             .unwrap();
         assert!(connection.try_read().is_ok());
         let req = connection.pop_parsed_request().unwrap();

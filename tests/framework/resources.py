@@ -572,6 +572,32 @@ class MachineConfigure:
         return datax
 
 
+class CpuConfiguration:
+    """Facility for configuring the guest's CPU capabilities."""
+
+    CPU_CFG_RESOURCE = "cpu-config"
+
+    def __init__(self, api_usocket_full_name, api_session, firecracker_version):
+        """Specify the information needed for sending API requests."""
+        url_encoded_path = urllib.parse.quote_plus(api_usocket_full_name)
+        api_url = API_USOCKET_URL_PREFIX + url_encoded_path + "/"
+
+        self._cpu_cfg_url = api_url + self.CPU_CFG_RESOURCE
+        self._api_session = api_session
+        self._firecracker_version = firecracker_version
+        self._datax = {}
+
+    @property
+    def configuration(self):
+        """Return cpu configuration dictionary."""
+        return self._datax
+
+    def put(self, **args):
+        datax = self.fetch_json_from_file(**args)
+        self._datax.update(datax)
+        return self._api_session.put("{}".format(self._cpu_cfg_url), json=self._datax)
+
+
 class MMDS:
     """Facility for sending microvm metadata services related API calls."""
 

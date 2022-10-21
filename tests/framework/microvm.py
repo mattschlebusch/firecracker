@@ -40,6 +40,7 @@ from framework.resources import (
     Actions,
     Balloon,
     BootSource,
+    CpuConfiguration,
     Drive,
     DescribeInstance,
     FullConfig,
@@ -126,6 +127,7 @@ class Microvm:
         self.actions = None
         self.balloon = None
         self.boot = None
+        self.cpu_cfg = None
         self.desc_inst = None
         self.drive = None
         self.full_cfg = None
@@ -527,6 +529,9 @@ class Microvm:
             self._api_socket, self._fc_binary_path, self._api_session
         )
         self.machine_cfg = MachineConfigure(
+            self._api_socket, self._api_session, self.firecracker_version
+        )
+        self.cpu_config = CpuConfiguration(
             self._api_socket, self._api_session, self.firecracker_version
         )
         self.metrics = Metrics(self._api_socket, self._api_session)

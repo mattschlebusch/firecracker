@@ -5,6 +5,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
 use std::{fmt, result};
@@ -12,13 +13,13 @@ use std::{fmt, result};
 use arch::x86_64::interrupts;
 use arch::x86_64::msr::SetMSRsError;
 use arch::x86_64::regs::{SetupFpuError, SetupRegistersError, SetupSpecialRegistersError};
-use cpuid::FeatureComparison;
+use cpuid::{t2s, FeatureComparison};
 use kvm_bindings::{
     kvm_debugregs, kvm_lapic_state, kvm_mp_state, kvm_regs, kvm_sregs, kvm_vcpu_events, kvm_xcrs,
     kvm_xsave, CpuId, Msrs, KVM_MAX_MSR_ENTRIES,
 };
 use kvm_ioctls::{VcpuExit, VcpuFd};
-use logger::{error, warn, IncMetric, METRICS};
+use logger::{error, log_dev_preview_warning, warn, IncMetric, METRICS};
 use versionize::{VersionMap, Versionize, VersionizeError, VersionizeResult};
 use versionize_derive::Versionize;
 use vm_memory::{Address, GuestAddress, GuestMemoryMmap};
@@ -265,13 +266,22 @@ impl KvmVcpu {
         mut cpuid: CpuId,
     ) -> std::result::Result<(), KvmVcpuConfigureError> {
         // If a template is specified, get the CPUID template, else use `cpuid`.
-        let mut config_cpuid = match vcpu_config.cpu_template {
+        let mut config_cpuid = match &vcpu_config.cpu_template {
             #[cfg(feature = "t2")]
             CpuFeaturesTemplate::T2 => cpuid_templates::T2.clone(),
             #[cfg(feature = "t2s")]
             CpuFeaturesTemplate::T2S => cpuid_templates::T2S.clone(),
             #[cfg(feature = "c3")]
             CpuFeaturesTemplate::C3 => cpuid_templates::C3.clone(),
+            CpuFeaturesTemplate::CUSTOM(cpu_config) => {
+                log_dev_preview_warning(
+                    "User-defined CPU configuration",
+                    Some(String::from(
+                        "Configuring guest vCPU with user-defined CPU template",
+                    )),
+                );
+                cpu_config.base_arch_config.to_owned()
+            }
             // If a template is not supplied we use the given `cpuid` as the base.
             CpuFeaturesTemplate::None => {
                 cpuid::Cpuid::try_from(cpuid::RawCpuid::from(cpuid.clone()))?
@@ -318,11 +328,7 @@ impl KvmVcpu {
         let mut msr_boot_entries = arch::x86_64::msr::create_boot_msr_entries();
         #[cfg(feature = "t2s")]
         if vcpu_config.cpu_template == CpuFeaturesTemplate::T2S {
-            for msr in cpuid::t2s::msr_entries_to_save() {
-                self.msr_list
-                    .push(*msr)
-                    .map_err(KvmVcpuConfigureError::PushMsrEntries)?;
-            }
+            self.msr_list.extend(t2s::msr_entries_to_save());
             cpuid::t2s::update_msr_entries(&mut msr_boot_entries);
         }
         // By this point we know that at snapshot, the list of MSRs we need to
