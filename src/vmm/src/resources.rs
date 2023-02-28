@@ -225,6 +225,7 @@ impl VmResources {
             vcpu_count: self.vm_config().vcpu_count,
             smt: self.vm_config().smt,
             cpu_template: self.vm_config().cpu_template,
+            custom_cpu_template: self.vm_config().custom_cpu_template.clone(),
         }
     }
 
@@ -589,6 +590,17 @@ mod tests {
             mmds: None,
             boot_timer: false,
             mmds_size_limit: HTTP_MAX_PAYLOAD_SIZE,
+        }
+    }
+
+    impl Default for VcpuConfig {
+        fn default() -> Self {
+            VcpuConfig {
+                vcpu_count: 1,
+                smt: false,
+                cpu_template: CpuFeaturesTemplate::None,
+                custom_cpu_template: None,
+            }
         }
     }
 

@@ -37,6 +37,11 @@ pub(crate) use aarch64::{Error as VcpuError, *};
 #[cfg(target_arch = "x86_64")]
 pub(crate) use x86_64::{Error as VcpuError, *};
 
+#[cfg(target_arch = "aarch64")]
+use crate::guest_config::aarch64::ArmCpuTemplate;
+#[cfg(target_arch = "x86_64")]
+use crate::guest_config::x86::X86CpuTemplate;
+
 /// Signal number (SIGRTMIN) used to kick Vcpus.
 pub(crate) const VCPU_RTSIG_OFFSET: i32 = 0;
 
@@ -75,8 +80,14 @@ pub struct VcpuConfig {
     pub vcpu_count: u8,
     /// Enable simultaneous multithreading in the CPUID configuration.
     pub smt: bool,
-    /// CPUID template to use.
+    /// Hard-coded CPU template to use.
     pub cpu_template: CpuFeaturesTemplate,
+    /// User-defined x86 CPU template.
+    #[cfg(target_arch = "x86_64")]
+    pub custom_cpu_template: Option<X86CpuTemplate>,
+    /// User-defined ARM CPU template.
+    #[cfg(target_arch = "aarch64")]
+    pub custom_cpu_template: Option<ArmCpuTemplate>,
 }
 
 // Using this for easier explicit type-casting to help IDEs interpret the code.
