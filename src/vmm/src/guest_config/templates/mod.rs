@@ -83,10 +83,21 @@ pub mod x86_64 {
     }
 }
 
-/// Guest config sub-module specifically useful for
+/// Guest config sub-module specifically for
 /// config templates.
 #[cfg(target_arch = "aarch64")]
-pub mod aarch64 {}
+pub mod aarch64 {
+    use serde::Deserialize;
+
+    use crate::guest_config::templates::RegisterModifier;
+
+    /// Wrapper type to containing aarch64 CPU config modifiers.
+    #[derive(Debug, Deserialize, Eq, PartialEq)]
+    pub struct Aarch64CpuTemplate {
+        /// Modifiers for registers on Aarch64 CPUs.
+        pub reg_modifiers: Vec<RegisterModifier>,
+    }
+}
 
 fn deserialize_u64_from_str<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
@@ -148,8 +159,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "x86_64")]
     use crate::guest_config::templates::x86_64::X86_64CpuTemplate;
 
+    #[cfg(target_arch = "x86_64")]
     const X86_64_TEMPLATE_JSON: &str = r#"{
         "msr_modifiers":  [
             {
@@ -183,11 +196,44 @@ mod tests {
         ]
     }"#;
 
+    #[cfg(target_arch = "aarch64")]
+    use crate::guest_config::templates::aarch64::Aarch64CpuTemplate;
+
+    #[cfg(target_arch = "aarch64")]
+    const AARCH64_TEMPLATE_JSON: &str = r#"{
+        "reg_modifiers":  [
+            {
+                "addr": "0x0AAC",
+                "mask": {
+                    "value": "0b0101",
+                    "filter": "0b1111"
+                }
+            },
+            {
+                "addr": "0x0AAB",
+                "mask": {
+                    "value": "0b0110",
+                    "filter": "0b1111"
+                }
+            }
+        ]
+    }"#;
+
     #[test]
     fn test_serialization_lifecycle() {
-        let cpu_config: X86_64CpuTemplate = serde_json::from_str(X86_64_TEMPLATE_JSON)
-            .expect("Failed to deserialize x86_64 CPU template.");
+        #[cfg(target_arch = "x86_64")]
+        {
+            let cpu_config: X86_64CpuTemplate = serde_json::from_str(X86_64_TEMPLATE_JSON)
+                .expect("Failed to deserialize x86_64 CPU template.");
+            assert_eq!(4, cpu_config.msr_modifiers.len());
+        }
 
-        assert_eq!(4, cpu_config.msr_modifiers.len());
+        #[cfg(target_arch = "aarch64")]
+        {
+            let cpu_config: Aarch64CpuTemplate = serde_json::from_str(AARCH64_TEMPLATE_JSON)
+                .expect("Failed to deserialize aarch64 CPU template.");
+
+            assert_eq!(2, cpu_config.reg_modifiers.len());
+        }
     }
 }
