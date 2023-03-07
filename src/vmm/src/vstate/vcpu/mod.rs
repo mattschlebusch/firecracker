@@ -664,6 +664,8 @@ pub enum VcpuEmulation {
 mod tests {
     #![allow(clippy::undocumented_unsafe_blocks)]
 
+    #[cfg(target_arch = "x86_64")]
+    use std::collections::HashMap;
     use std::fmt;
     use std::sync::{Arc, Barrier, Mutex};
 
@@ -678,8 +680,8 @@ mod tests {
     use crate::guest_config::aarch64::Aarch64CpuConfiguration;
     #[cfg(target_arch = "x86_64")]
     use crate::guest_config::cpuid::{Cpuid, RawCpuid};
-    // #[cfg(target_arch = "x86_64")]
-    // use crate::guest_config::x86_64::X86_64CpuConfiguration;
+    #[cfg(target_arch = "x86_64")]
+    use crate::guest_config::x86_64::X86_64CpuConfiguration;
     use crate::seccomp_filters::{get_filters, SeccompConfig};
     use crate::vstate::vcpu::Error as EmulationError;
     use crate::vstate::vm::tests::setup_vm;
@@ -936,12 +938,11 @@ mod tests {
                     &vm_mem,
                     entry_addr,
                     &vcpu_config,
-                    Cpuid::try_from(RawCpuid::from(_vm.supported_cpuid().clone())).unwrap(),
-                    // X86_64CpuConfiguration {
-                    //     cpuid: Cpuid::try_from(RawCpuid::from(_vm.supported_cpuid().clone()))
-                    //         .unwrap(),
-                    //     msrs: HashMap::new(),
-                    // },
+                    X86_64CpuConfiguration {
+                        cpuid: Cpuid::try_from(RawCpuid::from(_vm.supported_cpuid().clone()))
+                            .unwrap(),
+                        msrs: HashMap::new(),
+                    },
                 )
                 .expect("failed to configure vcpu");
         }

@@ -21,6 +21,7 @@ use versionize_derive::Versionize;
 use vm_memory::{Address, GuestAddress, GuestMemoryMmap};
 
 use crate::guest_config::cpuid::Cpuid;
+use crate::guest_config::x86_64::X86_64CpuConfiguration;
 use crate::vmm_config::machine_config::CpuFeaturesTemplate;
 use crate::vstate::vcpu::{VcpuConfig, VcpuEmulation};
 use crate::vstate::vm::Vm;
@@ -256,10 +257,9 @@ impl KvmVcpu {
         guest_mem: &GuestMemoryMmap,
         kernel_start_addr: GuestAddress,
         vcpu_config: &VcpuConfig,
-        cpuid: Cpuid,
-        // cpu_config: X86_64CpuConfiguration,
+        cpu_config: X86_64CpuConfiguration,
     ) -> std::result::Result<(), KvmVcpuConfigureError> {
-        // let cpuid: Cpuid = cpu_config.cpuid;
+        let cpuid: Cpuid = cpu_config.cpuid;
 
         // We use the given `cpuid` as the base.
         let cpuid = crate::guest_config::cpuid::Cpuid::try_from(
@@ -646,12 +646,14 @@ impl VcpuState {
 mod tests {
     #![allow(clippy::undocumented_unsafe_blocks)]
 
+    use std::collections::HashMap;
     use std::os::unix::io::AsRawFd;
 
     use kvm_ioctls::Cap;
 
     use super::*;
     use crate::guest_config::cpuid::RawCpuid;
+    use crate::guest_config::x86_64::X86_64CpuConfiguration;
     use crate::vstate::vm::tests::setup_vm;
     use crate::vstate::vm::Vm;
 
@@ -696,12 +698,10 @@ mod tests {
                 &vm_mem,
                 GuestAddress(0),
                 &vcpu_config,
-                Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-                // X86_64CpuConfiguration {
-                //     cpuid:
-                // Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-                // msrs: HashMap::new(),
-                // },
+                X86_64CpuConfiguration {
+                    cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
+                    msrs: HashMap::new(),
+                },
             ),
             Ok(())
         );
@@ -712,11 +712,10 @@ mod tests {
             &vm_mem,
             GuestAddress(arch::get_kernel_start()),
             &vcpu_config,
-            Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            // X86_64CpuConfiguration {
-            //     cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            // msrs: HashMap::new(),
-            // },
+            X86_64CpuConfiguration {
+                cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
+                msrs: HashMap::new(),
+            },
         );
 
         // Test configure while using the C3 template.
@@ -725,11 +724,10 @@ mod tests {
             &vm_mem,
             GuestAddress(0),
             &vcpu_config,
-            Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            // X86_64CpuConfiguration {
-            //     cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            //     msrs: HashMap::new(),
-            // },
+            X86_64CpuConfiguration {
+                cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
+                msrs: HashMap::new(),
+            },
         );
 
         // Test configure while using the T2S template.
@@ -738,11 +736,10 @@ mod tests {
             &vm_mem,
             GuestAddress(0),
             &vcpu_config,
-            Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            // X86_64CpuConfiguration {
-            //     cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            //     msrs: HashMap::new(),
-            // },
+            X86_64CpuConfiguration {
+                cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
+                msrs: HashMap::new(),
+            },
         );
 
         // Test configure while using the T2CL template.
@@ -751,11 +748,10 @@ mod tests {
             &vm_mem,
             GuestAddress(0),
             &vcpu_config,
-            Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            // X86_64CpuConfiguration {
-            //     cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            //     msrs: HashMap::new(),
-            // },
+            X86_64CpuConfiguration {
+                cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
+                msrs: HashMap::new(),
+            },
         );
 
         // Test configure while using the T2S template.
@@ -764,11 +760,10 @@ mod tests {
             &vm_mem,
             GuestAddress(0),
             &vcpu_config,
-            Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            // X86_64CpuConfiguration {
-            //     cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
-            //     msrs: HashMap::new(),
-            // },
+            X86_64CpuConfiguration {
+                cpuid: Cpuid::try_from(RawCpuid::from(vm.supported_cpuid().clone())).unwrap(),
+                msrs: HashMap::new(),
+            },
         );
 
         match &crate::guest_config::cpuid::common::get_vendor_id_from_host().unwrap() {
