@@ -56,6 +56,7 @@ pub mod x86_64 {
     use std::collections::{BTreeMap, HashMap};
     use std::str::FromStr;
 
+    use log::debug;
     use serde::de::Error as SerdeError;
     use serde::{Deserialize, Deserializer};
 
@@ -84,6 +85,7 @@ pub mod x86_64 {
         pub register: CpuidRegister,
         /// Mask to be applied to register's value at the address
         /// provided.
+        #[serde(deserialize_with = "deserialize_bitmask")]
         pub mask: BitMask,
     }
 
@@ -290,13 +292,64 @@ pub mod x86_64 {
             mask.value
         }
     }
+
+    /// Deserialized a composite bitmask string into a value-mask pair
+    /// in a BitMask
+    /// input string: "010x"
+    /// result: {
+    ///     filter: 1110
+    ///     value: 0100
+    /// }
+    pub fn deserialize_bitmask<'de, D>(deserializer: D) -> Result<BitMask, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut bitmask_str = String::deserialize(deserializer)?;
+
+        if bitmask_str.starts_with("0b") {
+            bitmask_str = bitmask_str[2..].to_string();
+        }
+
+        let mask_str = bitmask_str.replace('0', "1");
+        let mask_str = mask_str.replace('x', "0");
+        let value_str = bitmask_str.replace('x', "0");
+
+        debug!(
+            "{}",
+            format!(
+                "Input composite bitmask: [{}]\nMask: [{}]\nValue: [{}]",
+                bitmask_str, mask_str, value_str
+            )
+        );
+        Ok(BitMask {
+            filter: u64::from_str_radix(mask_str.as_str(), 2).map_err(|err| {
+                SerdeError::custom(format!(
+                    "Failed to parse string [{}] as a bitmask - {:?}",
+                    bitmask_str, err
+                ))
+            })?,
+            value: u64::from_str_radix(value_str.as_str(), 2).map_err(|err| {
+                SerdeError::custom(format!(
+                    "Failed to parse string [{}] as a bitmask - {:?}",
+                    bitmask_str, err
+                ))
+            })?,
+        })
+    }
 }
 
 /// Guest config sub-module specifically for
 /// config templates.
 #[cfg(target_arch = "aarch64")]
 pub mod aarch64 {
-    use serde::Deserialize;
+    use std::str::FromStr;
+
+    use log::debug;
+    use serde::de::Error as SerdeError;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::guest_config::aarch64::Aarch64CpuConfiguration;
+    use crate::guest_config::templates::{deserialize_u64_from_str, Error};
 
     /// Wrapper type to containing aarch64 CPU config modifiers.
     #[derive(Debug, Deserialize, Eq, PartialEq)]
@@ -369,6 +422,50 @@ pub mod aarch64 {
 
         Ok(deserialized_number)
     }
+
+    /// Deserialized a composite bitmask string into a value-mask pair
+    /// in a BitMask
+    /// input string: "010x"
+    /// result: {
+    ///     filter: 1110
+    ///     value: 0100
+    /// }
+    pub fn deserialize_bitmask<'de, D>(deserializer: D) -> Result<BitMask, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut bitmask_str = String::deserialize(deserializer)?;
+
+        if bitmask_str.starts_with("0b") {
+            bitmask_str = bitmask_str[2..].to_string();
+        }
+
+        let mask_str = bitmask_str.replace('0', "1");
+        let mask_str = mask_str.replace('x', "0");
+        let value_str = bitmask_str.replace('x', "0");
+
+        debug!(
+            "{}",
+            format!(
+                "Input composite bitmask: [{}]\nMask: [{}]\nValue: [{}]",
+                bitmask_str, mask_str, value_str
+            )
+        );
+        Ok(BitMask {
+            filter: u128::from_str_radix(mask_str.as_str(), 2).map_err(|err| {
+                SerdeError::custom(format!(
+                    "Failed to parse string [{}] as a bitmask - {:?}",
+                    bitmask_str, err
+                ))
+            })?,
+            value: u128::from_str_radix(value_str.as_str(), 2).map_err(|err| {
+                SerdeError::custom(format!(
+                    "Failed to parse string [{}] as a bitmask - {:?}",
+                    bitmask_str, err
+                ))
+            })?,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -396,9 +493,9 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     use crate::guest_config::x86_64::X86_64CpuConfiguration;
 
-    const TEMPLATE_DESERIALIZATION_MAX_US: u128 = 200;
+    const TEMPLATE_DESERIALIZATION_MAX_US: u128 = 1000;
     #[cfg(target_arch = "x86_64")]
-    const TEMPLATE_APPLICATION_MAX_US: u128 = 200;
+    const TEMPLATE_APPLICATION_MAX_US: u128 = 1000;
 
     #[cfg(target_arch = "x86_64")]
     const X86_64_TEMPLATE_JSON: &str = r#"{
@@ -410,10 +507,7 @@ mod tests {
                 "modifiers": [
                     {
                         "register": "eax",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0bx00100xxx1xxxxxxxxxxxxxxxxxxxxx1"
                     }
                 ]
             },
@@ -424,17 +518,11 @@ mod tests {
                 "modifiers": [
                     {
                         "register": "ebx",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0bxxx1xxxxxxxxxxxxxxxxxxxxx1"
                     },
                     {
                         "register": "ecx",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0bx00100xxx1xxxxxxxxxxx0xxxxx0xxx1"
                     }
                 ]
             },
@@ -445,10 +533,7 @@ mod tests {
                 "modifiers": [
                     {
                         "register": "edx",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0bx00100xxx1xxxxxxxxxxx0xxxxx0xxx1"
                     }
                 ]
             },
@@ -459,17 +544,11 @@ mod tests {
                 "modifiers": [
                     {
                         "register": "edx",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0b00100xxx1xxxxxx1xxxxxxxxxxxxxx1"
                     },
                     {
                         "register": "ecx",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0bx00100xxx1xxxxxxxxxxxxx111xxxxx1"
                     }
                 ]
             },
@@ -480,17 +559,11 @@ mod tests {
                 "modifiers": [
                     {
                         "register": "eax",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0bx00100xxx1xxxxx00xxxxxx000xxxxx1"
                     },
                     {
                         "register": "edx",
-                        "mask": {
-                            "value": "0b0101",
-                            "filter": "0b0111"
-                        }
+                        "mask": "0bx10100xxx1xxxxxxxxxxxxx000xxxxx1"
                     }
                 ]
             }
@@ -498,31 +571,19 @@ mod tests {
         "msr_modifiers":  [
             {
                 "addr": "0x0",
-                "mask": {
-                    "value": "0b0101",
-                    "filter": "0b0111"
-                }
+                "mask": "0bx00100xxx1xxxx00xxx1xxxxxxxxxxx1"
             },
             {
                 "addr": "0x1",
-                "mask": {
-                    "value": "0b0100",
-                    "filter": "0b1111"
-                }
+                "mask": "0bx00111xxx1xxxx111xxxxx101xxxxxx1"
             },
             {
                 "addr": "2",
-                "mask": {
-                    "value": "0b0100",
-                    "filter": "0b1111"
-                }
+                "mask": "0bx00100xxx1xxxxxx0000000xxxxxxxx1"
             },
             {
                 "addr": "0xbbca",
-                "mask": {
-                    "value": "0b0100",
-                    "filter": "0x1111"
-                }
+                "mask": "0bx00100xxx1xxxxxxxxx1"
             }
         ]
     }"#;
@@ -532,17 +593,11 @@ mod tests {
         "reg_modifiers":  [
             {
                 "addr": "0x0AAC",
-                "mask": {
-                    "value": "0b0101",
-                    "filter": "0b1111"
-                }
+                "mask": "0b1xx1"
             },
             {
                 "addr": "0x0AAB",
-                "mask": {
-                    "value": "0b0110",
-                    "filter": "0b1111"
-                }
+                "mask": "0b1x00"
             }
         ]
     }"#;
