@@ -373,6 +373,8 @@ pub mod aarch64 {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     #[cfg(target_arch = "x86_64")]
     use kvm_bindings::KVM_CPUID_FLAG_STATEFUL_FUNC;
     #[cfg(target_arch = "x86_64")]
@@ -393,6 +395,10 @@ mod tests {
     };
     #[cfg(target_arch = "x86_64")]
     use crate::guest_config::x86_64::X86_64CpuConfiguration;
+
+    const TEMPLATE_DESERIALIZATION_MAX_US: u128 = 200;
+    #[cfg(target_arch = "x86_64")]
+    const TEMPLATE_APPLICATION_MAX_US: u128 = 200;
 
     #[cfg(target_arch = "x86_64")]
     const X86_64_TEMPLATE_JSON: &str = r#"{
@@ -545,17 +551,32 @@ mod tests {
     fn test_serialization_lifecycle() {
         #[cfg(target_arch = "x86_64")]
         {
+            let start = Instant::now();
             let cpu_config: X86_64CpuTemplate = serde_json::from_str(X86_64_TEMPLATE_JSON)
                 .expect("Failed to deserialize x86_64 CPU template.");
+            let end = Instant::now();
+            assert!(
+                end.duration_since(start).as_micros() < TEMPLATE_DESERIALIZATION_MAX_US,
+                "Deserialization time [{} microseconds] over the threshold [{} microseconds]",
+                end.duration_since(start).as_micros(),
+                TEMPLATE_DESERIALIZATION_MAX_US,
+            );
             assert_eq!(5, cpu_config.cpuid_modifiers.len());
             assert_eq!(4, cpu_config.msr_modifiers.len());
         }
 
         #[cfg(target_arch = "aarch64")]
         {
+            let start = Instant::now();
             let cpu_config: Aarch64CpuTemplate = serde_json::from_str(AARCH64_TEMPLATE_JSON)
                 .expect("Failed to deserialize aarch64 CPU template.");
-
+            let end = Instant::now();
+            assert!(
+                end.duration_since(start).as_micros() < TEMPLATE_DESERIALIZATION_MAX_US,
+                "Deserialization time [{} microseconds] over the threshold [{} microseconds]",
+                end.duration_since(start).as_micros(),
+                TEMPLATE_DESERIALIZATION_MAX_US,
+            );
             assert_eq!(2, cpu_config.reg_modifiers.len());
         }
     }
@@ -571,7 +592,15 @@ mod tests {
                 msr_modifiers: vec![],
             };
 
+            let start = Instant::now();
             let guest_config_result = create_guest_cpu_config(&template, &host_configuration);
+            let end = Instant::now();
+            assert!(
+                end.duration_since(start).as_micros() < TEMPLATE_APPLICATION_MAX_US,
+                "Applying an emply template took [{} microseconds], threshold is [{} microseconds]",
+                end.duration_since(start).as_micros(),
+                TEMPLATE_APPLICATION_MAX_US
+            );
             assert!(
                 guest_config_result.is_ok(),
                 "{}",
