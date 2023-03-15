@@ -1,0 +1,88 @@
+{
+    "cpuid_templates": [
+        {
+            "leaf": "0x00000001",
+            "subleaf": "0x00000000",
+            "flag": "0",
+            "modifiers": [
+                {
+                    "register": "eax",
+                    "modifier": "0bxxxx000000000011xx00011011110010"
+                },
+                {
+                    "register": "ecx",
+                    "modifier": "0bxxxx0xxxxxxxx0xx00xx00x0000000xx"
+                },
+                {
+                    "register": "edx",
+                    "modifier": "0b000x0xxxx00xx0xxxxx1xxxx1xxxxxx"
+                }
+            ]
+        },
+        {
+            "leaf": "0x00000007",
+            "subleaf": "0x00000000",
+            "flag": "1",
+            "modifiers": [
+                {
+                    "register": "ebx",
+                    "modifier": "0b00000000000x000000000x1xx0x0x0xx"
+                },
+                {
+                    "register": "ecx",
+                    "modifier": "0bx0xxxxxxx0xxxxx0x0x00000x0x0000x"        
+                },
+                {
+                    "register": "edx",
+                    "modifier": "0b0xxxxxxxxxxxxxxxxxxxxxx0xxx000xx"        
+                }
+            ]
+        },
+        {
+            "leaf": "0x0000000d",
+            "subleaf": "0x00000000",
+            "flag": "1",
+            "modifiers": [
+                {
+                    "register": "eax",
+                    "modifier": "0bxxxxxxxxxxxxxxxxxxxxxx0x00000xxx"        
+                }
+            ]
+        },
+        {
+            "leaf": "0x0000000d",
+            "subleaf": "0x00000001",
+            "modifiers": [
+                {
+                    "register": "eax",
+                    "modifier": "0bxxxxxxxxxxxxxxxxxxxxxxxxxxxx000x"
+                }
+            ]
+        },
+        {
+            "leaf": "0x80000001",
+            "subleaf": "0x00000000",
+            "modifiers": [
+                {
+                    "register": "ecx",
+                    "modifier": "0bxxxxxxxxxxxxxxxxxxxxxxxxxxxx000x"        
+                },
+                {
+                    "register": "edx",
+                    "modifier": "0bxxxxx0xxxxxxxxxxxxxxxxxxxxxxxxxx"        
+                }
+            ]
+        },
+        {
+            "leaf": "0x80000008",
+            "subleaf": "0x00000000",
+            "modifiers": [
+                {
+                    "register": "edx",
+                    "modifier": "0bxxxxxxxxxxxxxxxxxxxxxx0xxxxxxxxx"
+                }
+            ]
+        }
+    ],
+    "msr_templates": []
+}

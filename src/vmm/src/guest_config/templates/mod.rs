@@ -620,6 +620,9 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::Read;
+    use std::path::Path;
     use std::time::Instant;
 
     #[cfg(target_arch = "x86_64")]
@@ -830,7 +833,7 @@ mod tests {
             let host_configuration = supported_cpu_config();
             let start = Instant::now();
             let guest_config_result =
-                create_guest_cpu_config(&build_test_template(), &host_configuration);
+                create_guest_cpu_config(&retrieve_test_template(), &host_configuration);
             let end = Instant::now();
             assert!(
                 guest_config_result.is_ok(),
@@ -986,6 +989,19 @@ mod tests {
             cpuid: cpuid_result.unwrap(),
             msrs: Default::default(),
         }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    fn retrieve_test_template() -> X86_64CpuTemplate {
+        let template_path = Path::new("framework/resources/cpu_template_t2_example.json");
+        let mut template_file =
+            File::open(template_path).expect("Unable to open template JSON file");
+
+        let template_json = &mut "".to_string();
+        template_file.read_to_string(template_json);
+
+        serde_json::from_str::<X86_64CpuTemplate>(&template_json)
+            .expect("Unable to parse JSON to build CPU template")
     }
 
     #[cfg(target_arch = "x86_64")]
