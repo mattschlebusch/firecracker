@@ -489,6 +489,31 @@ def test_api_cpu_config(test_microvm_with_api, custom_cpu_template):
     response = test_microvm.cpu_cfg.put(custom_cpu_template["template"])
     assert test_microvm.api_session.is_status_no_content(response.status_code)
 
+    # Check that any custom debug logging does not affect the API
+    # Configure logging.
+    log_fifo_path = os.path.join(test_microvm.path, "log_fifo")
+    log_fifo = log_tools.Fifo(log_fifo_path)
+    response = test_microvm.logger.put(
+        log_path=test_microvm.create_jailed_resource(log_fifo.path),
+        level="Debug",
+        show_level=true,
+        show_log_origin=true,
+    )
+    assert microvm.api_session.is_status_no_content(response.status_code)
+
+    # microvm.start_console_logger(log_fifo)
+
+    response = test_microvm.cpu_cfg.put("{}")
+    assert test_microvm.api_session.is_status_bad_request(response.status_code)
+    lines = test_microvm.log_data.splitlines()
+    for idx, line in enumerate(lines):
+        if idx == 0:
+            assert line.startswith("Running Firecracker")
+            continue
+
+    response = test_microvm.cpu_cfg.put(custom_cpu_template["template"])
+    assert test_microvm.api_session.is_status_no_content(response.status_code)
+
 
 def test_api_put_update_post_boot(test_microvm_with_api):
     """
